@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>串口命令转发器 - 5+版本</title>
+    
+    <!-- 样式 -->
+    <style>
+        /* 基础样式 */
+        :root {
+            --primary-color: #2196F3;
+            --success-color: #4CAF50;
+            --danger-color: #f44336;
+            --warning-color: #ff9800;
+            --info-color: #00bcd4;
+            --dark-color: #333;
+            --light-color: #f5f5f5;
+            --gray-color: #9e9e9e;
+            --border-radius: 8px;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 0;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            min-height: 100vh;
+            background: white;
+            margin: 0;
+            position: relative;
+        }
+
+        /* 加载遮罩 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 头部样式 */
+        .app-header {
+            background: linear-gradient(to right, var(--primary-color), var(--info-color));
+            color: white;
+            padding: 20px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .app-header h1 {
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online {
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: var(--danger-color);
+        }
+
+        .status-dot.connecting {
+            background: var(--warning-color);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* 卡片样式 */
+        .card {
+            margin: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            background: white;
+            transition: var(--transition);
+        }
+
+        .card-header {
+            background: var(--light-color);
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            color: var(--dark-color);
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* 状态显示 */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .status-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .status-item.connected {
+            border-left-color: var(--success-color);
+        }
+
+        .status-item.disconnected {
+            border-left-color: var(--danger-color);
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            color: var(--gray-color);
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        /* 按钮样式 */
+        .btn {
+            padding: 14px 20px;
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition);
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:active:not(:disabled) {
+            background: #1976D2;
+            transform: scale(0.98);
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:active:not(:disabled) {
+            background: #388E3C;
+            transform: scale(0.98);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-danger:active:not(:disabled) {
+            background: #D32F2F;
+            transform: scale(0.98);
+        }
+
+        .btn-warning {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .btn-warning:active:not(:disabled) {
+            background: #F57C00;
+            transform: scale(0.98);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .button-group .btn {
+            flex: 1;
+        }
+
+        /* 设备列表 */
+        .device-list {
+            margin-top: 15px;
+        }
+
+        .device-item {
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: var(--border-radius);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            transition: var(--transition);
+        }
+
+        .device-item:active {
+            background: #f5f5f5;
+            transform: scale(0.995);
+        }
+
+        .device-info {
+            flex: 1;
+        }
+
+        .device-name {
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 5px;
+        }
+
+        .device-address {
+            font-size: 0.9rem;
+            color: var(--gray-color);
+            font-family: monospace;
+        }
+
+        .device-rssi {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* 接收数据显示区域 */
+        .receive-display {
+            background: #1e1e1e;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        #receivedData {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #4ec9b0;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            min-height: 100px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.5;
+            border-bottom: 1px solid #333;
+        }
+
+        .receive-controls {
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            background: #252525;
+        }
+
+        .receive-controls .btn {
+            margin: 0;
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+
+        /* 日志区域 */
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            border-radius: var(--border-radius);
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .log-entry {
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            border-left: 3px solid var(--primary-color);
+            background: #252525;
+            color: #d4d4d4;
+            border-radius: 0 var(--border-radius) var(--border-radius) 0;
+        }
+
+        .log-entry.system {
+            border-left-color: var(--info-color);
+            color: #4fc1ff;
+        }
+
+        .log-entry.received {
+            border-left-color: var(--success-color);
+            color: #4ec9b0;
+        }
+
+        .log-entry.sent {
+            border-left-color: var(--primary-color);
+            color: #9cdcfe;
+        }
+
+        .log-entry.error {
+            border-left-color: var(--danger-color);
+            color: #f48771;
+        }
+
+        .log-time {
+            color: #6a9955;
+            margin-right: 10px;
+        }
+
+        /* 命令发送区域 */
+        .command-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .command-input input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .command-input input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .quick-commands {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .quick-command {
+            padding: 10px;
+            background: #f5f5f5;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .quick-command:active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        /* 底部信息 */
+        .app-footer {
+            background: var(--light-color);
+            padding: 15px;
+            text-align: center;
+            color: var(--gray-color);
+            font-size: 0.9rem;
+            border-top: 1px solid #eee;
+        }
+
+        .app-footer .hint {
+            font-size: 0.8rem;
+            margin-top: 5px;
+            color: var(--danger-color);
+        }
+
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--border-radius);
+            width: 100%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+        }
+
+        .close-modal {
+            font-size: 28px;
+            cursor: pointer;
+            color: white;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .modal-device-list {
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 480px) {
+            .card {
+                margin: 10px;
+            }
+            
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .quick-commands {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+        }
+
+        /* 连接动画 */
+        .connecting-animation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .connecting-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .connecting-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .connecting-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .connecting-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+
+        /* 吐司通知 */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: var(--border-radius);
+            z-index: 1001;
+            transition: transform 0.3s ease;
+            max-width: 90%;
+            text-align: center;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast.success {
+            background: var(--success-color);
+        }
+
+        .toast.error {
+            background: var(--danger-color);
+        }
+
+        .toast.warning {
+            background: var(--warning-color);
+        }
+
+        .toast.info {
+            background: var(--info-color);
+        }
+    </style>
+    
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <!-- 5+ API（HBuilderX必需） -->
+    <script src="js/html5plus.js"></script>
+</head>
+<body>
+    <!-- 加载遮罩 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <h3>串口命令转发器</h3>
+        <p id="loadingText">正在初始化应用...</p>
+        <p style="margin-top: 20px; font-size: 0.9rem; color: #ccc;">5+ API版本 - 兼容所有Android设备</p>
+    </div>
+
+    <!-- 吐司通知 -->
+    <div id="toast" class="toast"></div>
+
+    <!-- 主容器 -->
+    <div class="container" style="display: none;">
+        <!-- 头部 -->
+        <header class="app-header">
+            <h1><i class="material-icons">bluetooth</i> 串口转发器</h1>
+            <div class="server-status" id="serverStatus">
+                <span class="status-dot offline"></span>
+                <span id="serverStatusText">服务器未连接</span>
+            </div>
+        </header>
+
+        <!-- 状态卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">dashboard</i> 系统状态</h3>
+            </div>
+            <div class="card-body">
+                <div class="status-grid">
+                    <div class="status-item" id="bluetoothStatusItem">
+                        <div class="status-label">蓝牙状态</div>
+                        <div class="status-value" id="bluetoothStatus">未连接</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">设备名称</div>
+                        <div class="status-value" id="deviceName">无</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">设备地址</div>
+                        <div class="status-value" id="deviceAddress">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">命令统计</div>
+                        <div class="status-value" id="commandCount">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 蓝牙控制卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">bluetooth_audio</i> 蓝牙控制</h3>
+            </div>
+            <div class="card-body">
+                <div class="button-group">
+                    <button id="scanBtn" class="btn btn-primary">
+                        <i class="material-icons">search</i> 扫描设备
+                    </button>
+                    <button id="disconnectBtn" class="btn btn-danger" disabled>
+                        <i class="material-icons">link_off</i> 断开连接
+                    </button>
+                </div>
+                
+                <div class="device-list" id="deviceList">
+                    <div class="empty-state" id="emptyDevices">
+                        <i class="material-icons">devices_other</i>
+                        <p>点击扫描按钮搜索蓝牙设备</p>
+                    </div>
+                </div>
+                
+                <div class="connecting-animation" id="connectingAnimation" style="display: none;">
+                    <div class="connecting-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <span id="connectingText">正在连接...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 命令发送卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">send</i> 命令发送</h3>
+            </div>
+            <div class="card-body">
+                <div class="quick-commands">
+                    <div class="quick-command" data-cmd="AT">AT</div>
+                    <div class="quick-command" data-cmd="AT+TEST">测试</div>
+                    <div class="quick-command" data-cmd="AT+VER">版本</div>
+                    <div class="quick-command" data-cmd="AT+LED=ON">LED开</div>
+                    <div class="quick-command" data-cmd="AT+LED=OFF">LED关</div>
+                    <div class="quick-command" data-cmd="AT+RESET">复位</div>
+                </div>
+                
+                <div class="command-input">
+                    <input type="text" id="customCommand" placeholder="输入AT指令，按发送或回车">
+                    <button id="sendBtn" class="btn btn-success" disabled>
+                        <i class="material-icons">send</i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 接收数据显示卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">download</i> 接收数据</h3>
+                <button id="clearReceivedBtn" class="btn-icon" style="background: none; border: none; color: #666;">
+                    <i class="material-icons">clear_all</i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="receive-display">
+                    <div id="receivedData">等待数据...</div>
+                    <div class="receive-controls">
+                        <button id="copyReceivedBtn" class="btn btn-primary">
+                            <i class="material-icons">content_copy</i> 复制
+                        </button>
+                        <button id="saveReceivedBtn" class="btn btn-success">
+                            <i class="material-icons">save</i> 保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 日志卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">history</i> 运行日志</h3>
+                <button id="clearLogBtn" class="btn-icon" style="background: none; border: none; color: #666;">
+                    <i class="material-icons">delete_sweep</i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="log-container" id="logContainer">
+                    <div class="log-entry system">
+                        <span class="log-time">[系统]</span>
+                        <span class="log-content">串口命令转发器已启动</span>
+                    </div>
+                    <div class="log-entry system">
+                        <span class="log-time">[服务器]</span>
+                        <span class="log-content">服务器: 107.174.240.113:8080</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 服务器状态卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">dns</i> 服务器连接</h3>
+                <button id="reconnectBtn" class="btn-icon" style="background: none; border: none; color: #666;">
+                    <i class="material-icons">refresh</i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="server-info">
+                    <p><strong>服务器地址:</strong> ws://107.174.240.113:8080</p>
+                    <p><strong>设备ID:</strong> <span id="currentDeviceId">未设置</span></p>
+                    <p><strong>连接状态:</strong> <span id="wsStatus">未连接</span></p>
+                </div>
+                <button id="testServerBtn" class="btn btn-info" style="margin-top: 10px;">
+                    <i class="material-icons">wifi</i> 测试服务器连接
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部信息 -->
+        <footer class="app-footer">
+            <p>串口命令转发器 v1.0 - 5+ API版本</p>
+            <p class="hint">使用5+蓝牙API，兼容所有Android设备</p>
+            <p style="margin-top: 5px; font-size: 0.8rem;">
+                <span id="connectionInfo">等待连接...</span>
+            </p>
+        </footer>
+    </div>
+
+    <!-- 设备选择模态框 -->
+    <div id="deviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="material-icons">bluetooth_searching</i> 选择设备</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="modalDeviceList" class="modal-device-list"></div>
+                <div class="modal-actions">
+                    <button id="rescanBtn" class="btn btn-primary">
+                        <i class="material-icons">refresh</i> 重新扫描
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript代码 -->
+    <script>
+        // 全局变量
+        const App = {
+            config: {
+                serverUrl: 'ws://107.174.240.113:8080',
+                deviceId: 'android_device_' + Math.floor(Math.random() * 1000),
+                autoReconnect: true,
+                reconnectDelay: 3000,
+                logMaxLines: 100,
+                scanDuration: 10000, // 扫描时长10秒
+                baudRate: 9600,
+                receivedMaxLines: 100 // 接收数据显示最大行数
+            },
+            
+            // 状态变量
+            state: {
+                bluetoothConnected: false,
+                serverConnected: false,
+                scanning: false,
+                connecting: false,
+                currentDevice: null,
+                commandCount: 0,
+                logs: [],
+                receivedData: [],
+                discoveredDevices: []
+            },
+            
+            // DOM元素引用
+            elements: {},
+            
+            // 初始化
+            init: function() {
+                console.log('初始化应用...');
+                this.initElements();
+                this.initEvents();
+                this.check5PlusAPI();
+                this.connectWebSocket();
+                this.loadConfig();
+                
+                // 显示主界面
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    document.querySelector('.container').style.display = 'block';
+                    this.showToast('应用初始化完成', 'success');
+                    this.log('应用启动完成', 'system');
+                }, 1000);
+            },
+            
+            // 初始化DOM元素引用
+            initElements: function() {
+                this.elements = {
+                    // 状态显示
+                    bluetoothStatus: document.getElementById('bluetoothStatus'),
+                    bluetoothStatusItem: document.getElementById('bluetoothStatusItem'),
+                    deviceName: document.getElementById('deviceName'),
+                    deviceAddress: document.getElementById('deviceAddress'),
+                    commandCount: document.getElementById('commandCount'),
+                    serverStatusText: document.getElementById('serverStatusText'),
+                    serverStatusDot: document.querySelector('.server-status .status-dot'),
+                    
+                    // 按钮
+                    scanBtn: document.getElementById('scanBtn'),
+                    disconnectBtn: document.getElementById('disconnectBtn'),
+                    sendBtn: document.getElementById('sendBtn'),
+                    clearLogBtn: document.getElementById('clearLogBtn'),
+                    reconnectBtn: document.getElementById('reconnectBtn'),
+                    testServerBtn: document.getElementById('testServerBtn'),
+                    clearReceivedBtn: document.getElementById('clearReceivedBtn'),
+                    copyReceivedBtn: document.getElementById('copyReceivedBtn'),
+                    saveReceivedBtn: document.getElementById('saveReceivedBtn'),
+                    
+                    // 输入
+                    customCommand: document.getElementById('customCommand'),
+                    
+                    // 列表
+                    deviceList: document.getElementById('deviceList'),
+                    modalDeviceList: document.getElementById('modalDeviceList'),
+                    logContainer: document.getElementById('logContainer'),
+                    receivedData: document.getElementById('receivedData'),
+                    
+                    // 其他
+                    connectingAnimation: document.getElementById('connectingAnimation'),
+                    connectingText: document.getElementById('connectingText'),
+                    toast: document.getElementById('toast'),
+                    deviceModal: document.getElementById('deviceModal')
+                };
+            },
+            
+            // 初始化事件监听
+            initEvents: function() {
+                // 扫描按钮
+                this.elements.scanBtn.addEventListener('click', () => this.scanDevices());
+                
+                // 断开连接按钮
+                this.elements.disconnectBtn.addEventListener('click', () => this.disconnectBluetooth());
+                
+                // 发送按钮
+                this.elements.sendBtn.addEventListener('click', () => this.sendCommand());
+                
+                // 回车发送命令
+                this.elements.customCommand.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendCommand();
+                });
+                
+                // 清除日志
+                this.elements.clearLogBtn.addEventListener('click', () => this.clearLogs());
+                
+                // 重新连接服务器
+                this.elements.reconnectBtn.addEventListener('click', () => this.reconnectWebSocket());
+                
+                // 测试服务器
+                this.elements.testServerBtn.addEventListener('click', () => this.testServerConnection());
+                
+                // 快捷命令
+                document.querySelectorAll('.quick-command').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const command = e.target.getAttribute('data-cmd');
+                        this.elements.customCommand.value = command;
+                        this.sendCommand();
+                    });
+                });
+                
+                // 清空接收数据
+                this.elements.clearReceivedBtn.addEventListener('click', () => this.clearReceivedData());
+                
+                // 复制接收数据
+                this.elements.copyReceivedBtn.addEventListener('click', () => this.copyReceivedData());
+                
+                // 保存接收数据
+                this.elements.saveReceivedBtn.addEventListener('click', () => this.saveReceivedData());
+                
+                // 模态框关闭
+                document.querySelector('.close-modal').addEventListener('click', () => {
+                    this.hideDeviceModal();
+                });
+                
+                // 重新扫描按钮
+                document.getElementById('rescanBtn').addEventListener('click', () => this.scanDevices());
+            },
+            
+            // 检查5+ API支持
+            check5PlusAPI: function() {
+                if (typeof plus === 'undefined') {
+                    this.showToast('错误: 未检测到5+ API环境', 'error');
+                    this.log('错误: 需要5+ API环境运行', 'error');
+                    return false;
+                }
+                
+                // 检查蓝牙支持
+                if (!plus.bluetooth) {
+                    this.showToast('错误: 设备不支持蓝牙', 'error');
+                    this.log('错误: 设备不支持蓝牙', 'error');
+                    return false;
+                }
+                
+                this.log('5+ API检测正常', 'system');
+                return true;
+            },
+            
+            // 扫描蓝牙设备
+            scanDevices: function() {
+                if (!plus.bluetooth) {
+                    this.showToast('蓝牙API不可用', 'error');
+                    return;
+                }
+                
+                if (this.state.scanning) {
+                    this.showToast('正在扫描中...', 'warning');
+                    return;
+                }
+                
+                this.state.scanning = true;
+                this.state.discoveredDevices = [];
+                this.elements.scanBtn.disabled = true;
+                this.elements.scanBtn.innerHTML = '<i class="material-icons">refresh</i> 扫描中...';
+                
+                this.log('开始扫描蓝牙设备...', 'system');
+                this.showToast('开始扫描蓝牙设备', 'info');
+                
+                // 显示设备选择模态框
+                this.showDeviceModal();
+                this.updateModalDeviceList([]);
+                
+                // 开始扫描
+                plus.bluetooth.startBluetoothDevicesDiscovery({
+                    services: ['00001101-0000-1000-8000-00805F9B34FB'], // 标准SPP服务UUID
+                    allowDuplicatesKey: false,
+                    success: () => {
+                        this.log('蓝牙扫描已启动', 'system');
+                        
+                        // 监听设备发现
+                        plus.bluetooth.onBluetoothDeviceFound((result) => {
+                            const devices = result.devices;
+                            devices.forEach(device => {
+                                if (!this.state.discoveredDevices.some(d => d.deviceId === device.deviceId)) {
+                                    this.state.discoveredDevices.push({
+                                        deviceId: device.deviceId,
+                                        name: device.name || '未知设备',
+                                        RSSI: device.RSSI || 0
+                                    });
+                                    
+                                    this.updateModalDeviceList(this.state.discoveredDevices);
+                                    this.log(`发现设备: ${device.name || '未知'} (${device.deviceId})`, 'system');
+                                }
+                            });
+                        });
+                        
+                        // 10秒后停止扫描
+                        setTimeout(() => {
+                            this.stopScanning();
+                        }, 10000);
+                    },
+                    fail: (error) => {
+                        this.log(`扫描失败: ${error.message || error.code}`, 'error');
+                        this.showToast('扫描失败: ' + (error.message || error.code), 'error');
+                        this.stopScanning();
+                    }
+                });
+            },
+            
+            // 停止扫描
+            stopScanning: function() {
+                if (this.state.scanning) {
+                    plus.bluetooth.stopBluetoothDevicesDiscovery();
+                    this.state.scanning = false;
+                    
+                    this.elements.scanBtn.disabled = false;
+                    this.elements.scanBtn.innerHTML = '<i class="material-icons">search</i> 扫描设备';
+                    
+                    this.log(`扫描完成，发现 ${this.state.discoveredDevices.length} 个设备`, 'system');
+                    this.showToast(`发现 ${this.state.discoveredDevices.length} 个设备`, 'info');
+                    
+                    // 如果没有发现设备，自动关闭模态框
+                    if (this.state.discoveredDevices.length === 0) {
+                        setTimeout(() => {
+                            this.hideDeviceModal();
+                        }, 2000);
+                    }
+                }
+            },
+            
+            // 连接蓝牙设备
+            connectToDevice: function(deviceId, deviceName) {
+                if (this.state.connecting) {
+                    this.showToast('正在连接中...', 'warning');
+                    return;
+                }
+                
+                this.state.connecting = true;
+                this.showConnectingAnimation(`正在连接: ${deviceName}`);
+                this.log(`正在连接设备: ${deviceName} (${deviceId})`, 'system');
+                
+                plus.bluetooth.createBLEConnection({
+                    deviceId: deviceId,
+                    success: (result) => {
+                        this.log(`蓝牙连接成功: ${deviceName}`, 'system');
+                        
+                        // 获取服务
+                        this.getBLEServices(deviceId, deviceName);
+                    },
+                    fail: (error) => {
+                        this.log(`连接失败: ${error.message || error.code}`, 'error');
+                        this.showToast('连接失败: ' + (error.message || error.code), 'error');
+                        this.hideConnectingAnimation();
+                        this.state.connecting = false;
+                    }
+                });
+            },
+            
+            // 获取蓝牙服务
+            getBLEServices: function(deviceId, deviceName) {
+                plus.bluetooth.getBLEDeviceServices({
+                    deviceId: deviceId,
+                    success: (result) => {
+                        const services = result.services;
+                        this.log(`发现 ${services.length} 个服务`, 'system');
+                        
+                        // 寻找串口服务 (标准SPP UUID)
+                        const serialService = services.find(s => 
+                            s.uuid.toUpperCase() === '00001101-0000-1000-8000-00805F9B34FB');
+                        
+                        if (serialService) {
+                            this.log('找到串口服务', 'system');
+                            this.getCharacteristics(deviceId, serialService.uuid, deviceName);
+                        } else {
+                            this.log('未找到串口服务，尝试第一个服务', 'warning');
+                            if (services.length > 0) {
+                                this.getCharacteristics(deviceId, services[0].uuid, deviceName);
+                            } else {
+                                this.log('没有找到任何服务', 'error');
+                                this.showToast('没有找到可用的服务', 'error');
+                                this.hideConnectingAnimation();
+                                this.state.connecting = false;
+                            }
+                        }
+                    },
+                    fail: (error) => {
+                        this.log(`获取服务失败: ${error.message || error.code}`, 'error');
+                        this.showToast('获取服务失败', 'error');
+                        this.hideConnectingAnimation();
+                        this.state.connecting = false;
+                    }
+                });
+            },
+            
+            // 获取特征值
+            getCharacteristics: function(deviceId, serviceId, deviceName) {
+                plus.bluetooth.getBLEDeviceCharacteristics({
+                    deviceId: deviceId,
+                    serviceId: serviceId,
+                    success: (result) => {
+                        const characteristics = result.characteristics;
+                        this.log(`发现 ${characteristics.length} 个特征值`, 'system');
+                        
+                        // 寻找可写特征值
+                        const writeChar = characteristics.find(c => c.properties.write);
+                        const notifyChar = characteristics.find(c => c.properties.notify);
+                        
+                        if (writeChar) {
+                            // 保存设备连接信息
+                            this.state.currentDevice = {
+                                deviceId: deviceId,
+                                name: deviceName,
+                                serviceId: serviceId,
+                                writeCharId: writeChar.uuid,
+                                notifyCharId: notifyChar ? notifyChar.uuid : null
+                            };
+                            
+                            // 如果需要，开启通知
+                            if (notifyChar) {
+                                this.enableNotifications(deviceId, serviceId, notifyChar.uuid);
+                            }
+                            
+                            // 更新UI状态
+                            this.updateBluetoothStatus(true);
+                            this.elements.deviceName.textContent = deviceName;
+                            this.elements.deviceAddress.textContent = deviceId.substring(0, 17) + '...';
+                            this.elements.sendBtn.disabled = false;
+                            this.elements.disconnectBtn.disabled = false;
+                            
+                            this.log(`成功连接到设备: ${deviceName}`, 'system');
+                            this.showToast(`已连接到: ${deviceName}`, 'success');
+                            
+                            // 发送测试命令
+                            setTimeout(() => {
+                                this.sendBluetoothData('AT\r\n');
+                            }, 500);
+                            
+                        } else {
+                            this.log('没有找到可写的特征值', 'error');
+                            this.showToast('设备不支持数据发送', 'error');
+                        }
+                        
+                        this.hideConnectingAnimation();
+                        this.state.connecting = false;
+                        this.hideDeviceModal();
+                    },
+                    fail: (error) => {
+                        this.log(`获取特征值失败: ${error.message || error.code}`, 'error');
+                        this.showToast('获取特征值失败', 'error');
+                        this.hideConnectingAnimation();
+                        this.state.connecting = false;
+                    }
+                });
+            },
+            
+            // 开启通知
+            enableNotifications: function(deviceId, serviceId, characteristicId) {
+                plus.bluetooth.notifyBLECharacteristicValueChange({
+                    deviceId: deviceId,
+                    serviceId: serviceId,
+                    characteristicId: characteristicId,
+                    state: true,
+                    success: () => {
+                        this.log('已开启数据通知', 'system');
+                        
+                        // 监听数据接收
+                        plus.bluetooth.onBLECharacteristicValueChange((result) => {
+                            const value = result.value;
+                            try {
+                                // 尝试解析为文本
+                                let text = '';
+                                for (let i = 0; i < value.length; i++) {
+                                    text += String.fromCharCode(value[i]);
+                                }
+                                const trimmedText = text.trim();
+                                
+                                // 在日志中显示
+                                this.log(`收到数据: ${trimmedText}`, 'received');
+                                
+                                // 在接收数据区域显示
+                                this.displayReceivedData(trimmedText, value.length);
+                                
+                            } catch (e) {
+                                const errorMsg = `收到二进制数据: ${value.length}字节`;
+                                this.log(errorMsg, 'received');
+                                this.displayReceivedData(errorMsg, value.length);
+                            }
+                        });
+                    },
+                    fail: (error) => {
+                        this.log(`开启通知失败: ${error.message || error.code}`, 'warning');
+                    }
+                });
+            },
+            
+            // 显示接收到的数据
+            displayReceivedData: function(data, byteLength = 0) {
+                const timestamp = new Date().toLocaleTimeString();
+                let displayText = '';
+                
+                if (data && data.trim() !== '') {
+                    // 如果是正常文本数据
+                    displayText = `[${timestamp}] ${data}`;
+                } else if (byteLength > 0) {
+                    // 如果是二进制数据或空数据
+                    displayText = `[${timestamp}] 收到${byteLength}字节数据`;
+                } else {
+                    return;
+                }
+                
+                // 保存到内存数组
+                this.state.receivedData.push({
+                    time: timestamp,
+                    data: data,
+                    bytes: byteLength,
+                    fullText: displayText
+                });
+                
+                // 限制数据量
+                if (this.state.receivedData.length > this.config.receivedMaxLines) {
+                    this.state.receivedData.shift();
+                }
+                
+                // 更新显示
+                this.updateReceivedDisplay();
+            },
+            
+            // 更新接收数据显示
+            updateReceivedDisplay: function() {
+                const displayDiv = this.elements.receivedData;
+                if (!displayDiv) return;
+                
+                if (this.state.receivedData.length === 0) {
+                    displayDiv.textContent = '等待数据...';
+                    return;
+                }
+                
+                // 生成显示文本（最新的在前）
+                let displayText = '';
+                for (let i = this.state.receivedData.length - 1; i >= 0; i--) {
+                    const item = this.state.receivedData[i];
+                    displayText += item.fullText + '\n';
+                }
+                
+                displayDiv.textContent = displayText.trim();
+                
+                // 确保显示最新数据
+                displayDiv.scrollTop = 0;
+            },
+            
+            // 清空接收数据
+            clearReceivedData: function() {
+                this.state.receivedData = [];
+                this.updateReceivedDisplay();
+                this.log('接收数据已清空', 'system');
+                this.showToast('接收数据已清空', 'info');
+            },
+            
+            // 复制接收数据
+            copyReceivedData: function() {
+                if (this.state.receivedData.length === 0) {
+                    this.showToast('没有可复制的数据', 'warning');
+                    return;
+                }
+                
+                let textToCopy = '';
+                for (let i = this.state.receivedData.length - 1; i >= 0; i--) {
+                    textToCopy += this.state.receivedData[i].fullText + '\n';
+                }
+                
+                // 使用5+ API的Clipboard
+                if (plus && plus.navigator && plus.navigator.setClipboard) {
+                    plus.navigator.setClipboard(textToCopy, () => {
+                        this.showToast('数据已复制到剪贴板', 'success');
+                        this.log('接收数据已复制', 'system');
+                    }, (error) => {
+                        this.showToast('复制失败: ' + error.message, 'error');
+                    });
+                } else {
+                    // 降级方案：使用execCommand
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        this.showToast('数据已复制到剪贴板', 'success');
+                        this.log('接收数据已复制', 'system');
+                    } catch (err) {
+                        this.showToast('复制失败', 'error');
+                    }
+                    document.body.removeChild(textarea);
+                }
+            },
+            
+            // 保存接收数据
+            saveReceivedData: function() {
+                if (this.state.receivedData.length === 0) {
+                    this.showToast('没有可保存的数据', 'warning');
+                    return;
+                }
+                
+                let textToSave = '=== 串口接收数据记录 ===\n';
+                textToSave += '时间戳: ' + new Date().toLocaleString() + '\n';
+                textToSave += '设备: ' + (this.state.currentDevice ? this.state.currentDevice.name : '未连接') + '\n';
+                textToSave += '记录条数: ' + this.state.receivedData.length + '\n';
+                textToSave += '=========================\n\n';
+                
+                for (let i = this.state.receivedData.length - 1; i >= 0; i--) {
+                    textToSave += this.state.receivedData[i].fullText + '\n';
+                }
+                
+                // 使用5+ API保存文件
+                if (plus && plus.io) {
+                    const fileName = `serial_data_${new Date().getTime()}.txt`;
+                    
+                    plus.io.requestFileSystem(plus.io.PRIVATE_DOC, (fs) => {
+                        fs.root.getFile(fileName, {create: true}, (fileEntry) => {
+                            fileEntry.createWriter((writer) => {
+                                writer.onwrite = () => {
+                                    this.showToast(`数据已保存到: ${fileName}`, 'success');
+                                    this.log(`接收数据已保存到文件: ${fileName}`, 'system');
+                                };
+                                writer.onerror = (e) => {
+                                    this.showToast('保存失败: ' + e.message, 'error');
+                                };
+                                writer.write(textToSave);
+                            }, (error) => {
+                                this.showToast('创建文件写入器失败: ' + error.message, 'error');
+                            });
+                        }, (error) => {
+                            this.showToast('创建文件失败: ' + error.message, 'error');
+                        });
+                    }, (error) => {
+                        this.showToast('请求文件系统失败: ' + error.message, 'error');
+                    });
+                } else {
+                    // 降级方案：提示用户手动保存
+                    const blob = new Blob([textToSave], {type: 'text/plain;charset=utf-8'});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `serial_data_${new Date().getTime()}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    this.showToast('数据文件已开始下载', 'success');
+                    this.log('接收数据已保存为文件', 'system');
+                }
+            },
+            
+            // 发送蓝牙数据
+            sendBluetoothData: function(data) {
+                if (!this.state.currentDevice) {
+                    this.showToast('蓝牙未连接', 'error');
+                    return;
+                }
+                
+                const { deviceId, serviceId, writeCharId } = this.state.currentDevice;
+                
+                // 转换为ArrayBuffer
+                const buffer = new ArrayBuffer(data.length);
+                const view = new Uint8Array(buffer);
+                for (let i = 0; i < data.length; i++) {
+                    view[i] = data.charCodeAt(i);
+                }
+                
+                // 转换为base64（5+ API需要）
+                let binary = '';
+                const bytes = new Uint8Array(buffer);
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const base64Data = window.btoa(binary);
+                
+                plus.bluetooth.writeBLECharacteristicValue({
+                    deviceId: deviceId,
+                    serviceId: serviceId,
+                    characteristicId: writeCharId,
+                    value: base64Data,
+                    success: () => {
+                        this.log(`发送: ${data.trim()}`, 'sent');
+                        this.state.commandCount++;
+                        this.elements.commandCount.textContent = this.state.commandCount;
+                        this.showToast('发送成功', 'success');
+                    },
+                    fail: (error) => {
+                        this.log(`发送失败: ${error.message || error.code}`, 'error');
+                        this.showToast('发送失败', 'error');
+                    }
+                });
+            },
+            
+            // 断开蓝牙连接
+            disconnectBluetooth: function() {
+                if (this.state.currentDevice) {
+                    const deviceId = this.state.currentDevice.deviceId;
+                    const deviceName = this.state.currentDevice.name;
+                    
+                    plus.bluetooth.closeBLEConnection({
+                        deviceId: deviceId,
+                        success: () => {
+                            this.log(`已断开设备: ${deviceName}`, 'system');
+                            this.showToast(`已断开: ${deviceName}`, 'info');
+                            
+                            // 重置状态
+                            this.state.currentDevice = null;
+                            this.state.receivedData = [];
+                            this.updateBluetoothStatus(false);
+                            this.elements.deviceName.textContent = '无';
+                            this.elements.deviceAddress.textContent = '-';
+                            this.elements.sendBtn.disabled = true;
+                            this.elements.disconnectBtn.disabled = true;
+                            this.updateReceivedDisplay();
+                        },
+                        fail: (error) => {
+                            this.log(`断开连接失败: ${error.message || error.code}`, 'error');
+                        }
+                    });
+                }
+            },
+            
+            // 更新蓝牙状态显示
+            updateBluetoothStatus: function(connected) {
+                this.state.bluetoothConnected = connected;
+                
+                if (connected) {
+                    this.elements.bluetoothStatus.textContent = '已连接';
+                    this.elements.bluetoothStatusItem.classList.remove('disconnected');
+                    this.elements.bluetoothStatusItem.classList.add('connected');
+                } else {
+                    this.elements.bluetoothStatus.textContent = '未连接';
+                    this.elements.bluetoothStatusItem.classList.remove('connected');
+                    this.elements.bluetoothStatusItem.classList.add('disconnected');
+                }
+            },
+            
+            // WebSocket连接
+            connectWebSocket: function() {
+                try {
+                    this.updateServerStatus('connecting');
+                    this.log('正在连接服务器...', 'system');
+                    
+                    this.ws = new WebSocket(this.config.serverUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.log('服务器连接成功', 'system');
+                        this.updateServerStatus('online');
+                        this.showToast('服务器连接成功', 'success');
+                        
+                        // 注册设备
+                        this.registerDevice();
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleWebSocketMessage(data);
+                        } catch (e) {
+                            this.log(`收到消息: ${event.data}`, 'received');
+                        }
+                    };
+                    
+                    this.ws.onclose = (event) => {
+                        this.log(`服务器连接关闭: ${event.code} ${event.reason || '无'}`, 'system');
+                        this.updateServerStatus('offline');
+                        
+                        // 自动重连
+                        if (this.config.autoReconnect) {
+                            setTimeout(() => {
+                                this.reconnectWebSocket();
+                            }, this.config.reconnectDelay);
+                        }
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        this.log('服务器连接错误', 'error');
+                        this.updateServerStatus('offline');
+                    };
+                    
+                } catch (error) {
+                    this.log(`创建WebSocket失败: ${error.message}`, 'error');
+                    this.updateServerStatus('offline');
+                }
+            },
+            
+            // 处理WebSocket消息
+            handleWebSocketMessage: function(data) {
+                if (data.type === 'command') {
+                    const command = data.data;
+                    this.log(`收到服务器命令: ${command}`, 'received');
+                    
+                    // 转发到蓝牙
+                    if (this.state.currentDevice) {
+                        this.sendBluetoothData(command + '\r\n');
+                    } else {
+                        this.showToast('收到命令但蓝牙未连接', 'warning');
+                    }
+                } else if (data.type === 'registered') {
+                    this.log('设备注册成功', 'system');
+                    this.showToast('设备注册成功', 'success');
+                } else if (data.type === 'error') {
+                    this.log(`服务器错误: ${data.message}`, 'error');
+                    this.showToast(`服务器错误: ${data.message}`, 'error');
+                }
+            },
+            
+            // 注册设备
+            registerDevice: function() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const message = {
+                        type: 'register',
+                        device_id: this.config.deviceId,
+                        timestamp: Date.now(),
+                        platform: '5plus'
+                    };
+                    this.ws.send(JSON.stringify(message));
+                    this.log('发送设备注册信息', 'system');
+                }
+            },
+            
+            // 重新连接WebSocket
+            reconnectWebSocket: function() {
+                this.log('尝试重新连接服务器...', 'system');
+                if (this.ws) {
+                    this.ws.close();
+                }
+                this.connectWebSocket();
+            },
+            
+            // 测试服务器连接
+            testServerConnection: function() {
+                this.showToast('正在测试服务器连接...', 'info');
+                this.log('测试服务器连接', 'system');
+                
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ type: 'ping' }));
+                    this.showToast('服务器连接正常', 'success');
+                } else {
+                    this.showToast('服务器未连接', 'error');
+                }
+            },
+            
+            // 更新服务器状态显示
+            updateServerStatus: function(status) {
+                this.state.serverConnected = status === 'online';
+                
+                const dot = this.elements.serverStatusDot;
+                const text = this.elements.serverStatusText;
+                
+                dot.className = 'status-dot';
+                
+                switch (status) {
+                    case 'online':
+                        dot.classList.add('online');
+                        text.textContent = '服务器已连接';
+                        break;
+                    case 'offline':
+                        dot.classList.add('offline');
+                        text.textContent = '服务器未连接';
+                        break;
+                    case 'connecting':
+                        dot.classList.add('connecting');
+                        text.textContent = '正在连接...';
+                        break;
+                }
+            },
+            
+            // 发送命令
+            sendCommand: function() {
+                const command = this.elements.customCommand.value.trim();
+                if (!command) {
+                    this.showToast('请输入命令', 'warning');
+                    return;
+                }
+                
+                // 发送到蓝牙
+                this.sendBluetoothData(command + '\r\n');
+                
+                // 清空输入框
+                this.elements.customCommand.value = '';
+                
+                // 自动聚焦
+                setTimeout(() => {
+                    this.elements.customCommand.focus();
+                }, 100);
+            },
+            
+            // 显示设备选择模态框
+            showDeviceModal: function() {
+                this.elements.deviceModal.style.display = 'flex';
+            },
+            
+            // 隐藏设备选择模态框
+            hideDeviceModal: function() {
+                this.elements.deviceModal.style.display = 'none';
+                this.stopScanning();
+            },
+            
+            // 更新模态框设备列表
+            updateModalDeviceList: function(devices) {
+                const container = this.elements.modalDeviceList;
+                container.innerHTML = '';
+                
+                if (devices.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px 20px; color: #666;">
+                            <i class="material-icons" style="font-size: 48px; margin-bottom: 10px;">bluetooth_disabled</i>
+                            <p>正在搜索设备...</p>
+                            <p style="font-size: 0.9rem; margin-top: 10px;">请确保蓝牙设备已开启并处于可发现模式</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                devices.forEach(device => {
+                    const item = document.createElement('div');
+                    item.className = 'device-item';
+                    item.innerHTML = `
+                        <div class="device-info">
+                            <div class="device-name">${device.name}</div>
+                            <div class="device-address">${device.deviceId}</div>
+                            <div class="device-rssi">信号强度: ${device.RSSI} dBm</div>
+                        </div>
+                        <i class="material-icons" style="color: var(--primary-color);">chevron_right</i>
+                    `;
+                    
+                    item.addEventListener('click', () => {
+                        this.connectToDevice(device.deviceId, device.name);
+                    });
+                    
+                    container.appendChild(item);
+                });
+            },
+            
+            // 显示连接动画
+            showConnectingAnimation: function(text) {
+                if (this.elements.connectingText) {
+                    this.elements.connectingText.textContent = text;
+                }
+                this.elements.connectingAnimation.style.display = 'flex';
+            },
+            
+            // 隐藏连接动画
+            hideConnectingAnimation: function() {
+                this.elements.connectingAnimation.style.display = 'none';
+            },
+            
+            // 添加日志
+            log: function(message, type = 'system') {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.innerHTML = `<span class="log-time">[${timestamp}]</span><span class="log-content">${message}</span>`;
+                
+                this.elements.logContainer.appendChild(entry);
+                
+                // 限制日志数量
+                const entries = this.elements.logContainer.querySelectorAll('.log-entry');
+                if (entries.length > this.config.logMaxLines) {
+                    entries[0].remove();
+                }
+                
+                // 自动滚动到底部
+                this.elements.logContainer.scrollTop = this.elements.logContainer.scrollHeight;
+                
+                // 保存到内存
+                this.state.logs.push({ time: timestamp, message, type });
+            },
+            
+            // 清除日志
+            clearLogs: function() {
+                this.elements.logContainer.innerHTML = '';
+                this.state.logs = [];
+                this.log('日志已清除', 'system');
+                this.showToast('日志已清除', 'info');
+            },
+            
+            // 显示Toast通知
+            showToast: function(message, type = 'info') {
+                const toast = this.elements.toast;
+                toast.textContent = message;
+                toast.className = `toast ${type}`;
+                
+                // 显示
+                setTimeout(() => {
+                    toast.classList.add('show');
+                }, 10);
+                
+                // 3秒后隐藏
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            },
+            
+            // 加载配置
+            loadConfig: function() {
+                try {
+                    const saved = localStorage.getItem('serialForwarderConfig');
+                    if (saved) {
+                        const config = JSON.parse(saved);
+                        Object.assign(this.config, config);
+                        
+                        // 更新当前设备ID显示
+                        document.getElementById('currentDeviceId').textContent = this.config.deviceId;
+                    }
+                } catch (e) {
+                    console.error('加载配置失败:', e);
+                }
+            },
+            
+            // 保存配置
+            saveConfig: function() {
+                try {
+                    localStorage.setItem('serialForwarderConfig', JSON.stringify(this.config));
+                    this.log('配置已保存', 'system');
+                } catch (e) {
+                    console.error('保存配置失败:', e);
+                }
+            }
+        };
+        
+        // 页面加载完成后初始化应用
+        document.addEventListener('DOMContentLoaded', function() {
+            // 延迟初始化，确保5+ API已加载
+            setTimeout(() => {
+                App.init();
+            }, 500);
+        });
+        
+        // 防止页面滚动
+        document.addEventListener('touchmove', function(e) {
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // 处理返回键
+        document.addEventListener('plusready', function() {
+            if (plus.key) {
+                plus.key.addEventListener('backbutton', function() {
+                    const modal = document.getElementById('deviceModal');
+                    if (modal.style.display === 'flex') {
+                        App.hideDeviceModal();
+                    } else {
+                        // 退出确认
+                        if (confirm('确定要退出应用吗？')) {
+                            plus.runtime.quit();
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

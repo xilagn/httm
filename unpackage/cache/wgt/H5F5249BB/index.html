@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>串口命令转发器 - 支持JDY-31 SPP 3.0</title>
+    
+    <!-- 样式 -->
+    <style>
+        /* 基础样式 */
+        :root {
+            --primary-color: #2196F3;
+            --success-color: #4CAF50;
+            --danger-color: #f44336;
+            --warning-color: #ff9800;
+            --info-color: #00bcd4;
+            --dark-color: #333;
+            --light-color: #f5f5f5;
+            --gray-color: #9e9e9e;
+            --border-radius: 8px;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .container {
+            min-height: 100vh;
+            background: white;
+            overflow: visible;
+        }
+
+        /* 加载遮罩 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 头部样式 */
+        .app-header {
+            background: linear-gradient(to right, var(--primary-color), var(--info-color));
+            color: white;
+            padding: 20px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .app-header h1 {
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online {
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: var(--danger-color);
+        }
+
+        .status-dot.connecting {
+            background: var(--warning-color);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* 卡片样式 */
+        .card {
+            margin: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            background: white;
+            transition: var(--transition);
+        }
+
+        .card-header {
+            background: var(--light-color);
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            color: var(--dark-color);
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* 状态显示 */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .status-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .status-item.connected {
+            border-left-color: var(--success-color);
+        }
+
+        .status-item.disconnected {
+            border-left-color: var(--danger-color);
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            color: var(--gray-color);
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        /* 按钮样式 */
+        .btn {
+            padding: 14px 20px;
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition);
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:active:not(:disabled) {
+            background: #1976D2;
+            transform: scale(0.98);
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:active:not(:disabled) {
+            background: #388E3C;
+            transform: scale(0.98);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-danger:active:not(:disabled) {
+            background: #D32F2F;
+            transform: scale(0.98);
+        }
+
+        .btn-warning {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .btn-warning:active:not(:disabled) {
+            background: #F57C00;
+            transform: scale(0.98);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .button-group .btn {
+            flex: 1;
+        }
+
+        /* 设备列表 */
+        .device-list {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .device-item {
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: var(--border-radius);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            transition: var(--transition);
+        }
+
+        .device-item:active {
+            background: #f5f5f5;
+            transform: scale(0.995);
+        }
+
+        .device-info {
+            flex: 1;
+        }
+
+        .device-name {
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 5px;
+        }
+
+        .device-address {
+            font-size: 0.9rem;
+            color: var(--gray-color);
+            font-family: monospace;
+        }
+
+        .device-rssi {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .device-type {
+            font-size: 0.8rem;
+            color: #2196F3;
+            background: #e3f2fd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-top: 3px;
+            display: inline-block;
+        }
+
+        /* 接收数据显示区域 */
+        .receive-display {
+            background: #1e1e1e;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        #receivedData {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #4ec9b0;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            min-height: 100px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.5;
+            border-bottom: 1px solid #333;
+        }
+
+        .receive-controls {
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            background: #252525;
+        }
+
+        .receive-controls .btn {
+            margin: 0;
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+
+        /* 后台运行开关样式 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--success-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        /* 后台运行状态指示 */
+        .background-status.active {
+            background: #e8f5e9 !important;
+            color: var(--success-color) !important;
+            border: 1px solid #c8e6c9;
+        }
+
+        .background-status.inactive {
+            background: #ffebee !important;
+            color: var(--danger-color) !important;
+            border: 1px solid #ffcdd2;
+        }
+
+        /* 后台通知样式 */
+        .background-notification {
+            position: fixed;
+            top: 70px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: var(--border-radius);
+            z-index: 1002;
+            font-size: 0.9rem;
+            max-width: 250px;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* 日志区域 */
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            background: #1e1e1e;
+            border-radius: var(--border-radius);
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .log-entry {
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            border-left: 3px solid var(--primary-color);
+            background: #252525;
+            color: #d4d4d4;
+            border-radius: 0 var(--border-radius) var(--border-radius) 0;
+        }
+
+        .log-entry.system {
+            border-left-color: var(--info-color);
+            color: #4fc1ff;
+        }
+
+        .log-entry.received {
+            border-left-color: var(--success-color);
+            color: #4ec9b0;
+        }
+
+        .log-entry.sent {
+            border-left-color: var(--primary-color);
+            color: #9cdcfe;
+        }
+
+        .log-entry.error {
+            border-left-color: var(--danger-color);
+            color: #f48771;
+        }
+
+        .log-time {
+            color: #6a9955;
+            margin-right: 10px;
+        }
+
+        /* 命令发送区域 */
+        .command-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .command-input input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .command-input input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .quick-commands {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .quick-command {
+            padding: 10px;
+            background: #f5f5f5;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .quick-command:active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        /* 设备ID设置 */
+        .device-id-setting {
+            margin-bottom: 20px;
+        }
+
+        .device-id-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .device-id-input input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-family: monospace;
+        }
+
+        .device-id-input input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .device-id-hint {
+            font-size: 0.8rem;
+            color: var(--gray-color);
+            margin-top: 5px;
+        }
+
+        /* 底部信息 */
+        .app-footer {
+            background: var(--light-color);
+            padding: 15px;
+            text-align: center;
+            color: var(--gray-color);
+            font-size: 0.9rem;
+            border-top: 1px solid #eee;
+        }
+
+        .app-footer .hint {
+            font-size: 0.8rem;
+            margin-top: 5px;
+            color: var(--danger-color);
+        }
+
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--border-radius);
+            width: 100%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+        }
+
+        .close-modal {
+            font-size: 28px;
+            cursor: pointer;
+            color: white;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .modal-device-list {
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 480px) {
+            .card {
+                margin: 10px;
+            }
+            
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .quick-commands {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+        }
+
+        /* 连接动画 */
+        .connecting-animation {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .connecting-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .connecting-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .connecting-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .connecting-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+
+        /* 吐司通知 */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: var(--border-radius);
+            z-index: 1001;
+            transition: transform 0.3s ease;
+            max-width: 90%;
+            text-align: center;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast.success {
+            background: var(--success-color);
+        }
+
+        .toast.error {
+            background: var(--danger-color);
+        }
+
+        .toast.warning {
+            background: var(--warning-color);
+        }
+
+        .toast.info {
+            background: var(--info-color);
+        }
+    </style>
+    
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <!-- 5+ API（HBuilderX必需） -->
+    <script src="js/html5plus.js"></script>
+</head>
+<body>
+    <!-- 加载遮罩 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <h3>串口命令转发器</h3>
+        <p id="loadingText">正在初始化应用...</p>
+        <p style="margin-top: 20px; font-size: 0.9rem; color: #ccc;">5+ API版本 - 支持JDY-31 SPP 3.0</p>
+    </div>
+
+    <!-- 吐司通知 -->
+    <div id="toast" class="toast"></div>
+
+    <!-- 主容器 -->
+    <div class="container" style="display: none;">
+        <!-- 头部 -->
+        <header class="app-header">
+            <h1><i class="material-icons">bluetooth</i> 串口转发器</h1>
+            <div class="server-status" id="serverStatus">
+                <span class="status-dot offline"></span>
+                <span id="serverStatusText">服务器未连接</span>
+            </div>
+        </header>
+
+        <!-- 设备ID设置卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">fingerprint</i> 设备标识</h3>
+            </div>
+            <div class="card-body">
+                <div class="device-id-setting">
+                    <div class="device-id-input">
+                        <input type="text" id="deviceIdInput" placeholder="请输入设备ID (如: device_001)">
+                        <button id="saveDeviceIdBtn" class="btn btn-success">
+                            <i class="material-icons">save</i> 保存
+                        </button>
+                    </div>
+                    <div class="device-id-hint">
+                        当前设备ID: <span id="currentDeviceIdDisplay" style="font-family: monospace; font-weight: bold;">未设置</span>
+                        <br>提示: 设备ID用于服务器识别您的设备，请设置一个固定且唯一的ID
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 状态卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">dashboard</i> 系统状态</h3>
+            </div>
+            <div class="card-body">
+                <div class="status-grid">
+                    <div class="status-item" id="bluetoothStatusItem">
+                        <div class="status-label">蓝牙状态</div>
+                        <div class="status-value" id="bluetoothStatus">未初始化</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">设备名称</div>
+                        <div class="status-value" id="deviceName">无</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">设备地址</div>
+                        <div class="status-value" id="deviceAddress">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">命令统计</div>
+                        <div class="status-value" id="commandCount">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 蓝牙控制卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">bluetooth_audio</i> 蓝牙控制</h3>
+            </div>
+            <div class="card-body">
+                <div class="button-group">
+                    <button id="scanBtn" class="btn btn-primary" disabled>
+                        <i class="material-icons">search</i> 扫描设备
+                    </button>
+                    <button id="disconnectBtn" class="btn btn-danger" disabled>
+                        <i class="material-icons">link_off</i> 断开连接
+                    </button>
+                </div>
+                
+                <div class="device-list" id="deviceList">
+                    <div class="empty-state" id="emptyDevices">
+                        <i class="material-icons">devices_other</i>
+                        <p>蓝牙初始化后点击扫描按钮</p>
+                    </div>
+                </div>
+                
+                <div class="connecting-animation" id="connectingAnimation" style="display: none;">
+                    <div class="connecting-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <span id="connectingText">正在连接...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 后台运行控制卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">play_circle_filled</i> 后台运行</h3>
+            </div>
+            <div class="card-body">
+                <div class="background-control">
+                    <p style="margin-bottom: 15px; color: #666; font-size: 0.9rem;">
+                        开启后台运行后，应用在后台仍可保持连接并转发命令
+                    </p>
+                    <div class="switch-container" style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>后台运行模式</span>
+                        <label class="switch">
+                            <input type="checkbox" id="backgroundModeSwitch">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="background-status" id="backgroundStatus" style="
+                        margin-top: 15px;
+                        padding: 10px;
+                        background: #f5f5f5;
+                        border-radius: var(--border-radius);
+                        font-size: 0.9rem;
+                        color: #666;
+                    ">
+                        <i class="material-icons" style="vertical-align: middle; margin-right: 5px;">info</i>
+                        <span>当前状态: 前台运行</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 命令发送卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">send</i> 命令发送</h3>
+            </div>
+            <div class="card-body">
+                <div class="quick-commands">
+                    <div class="quick-command" data-cmd="AT">AT</div>
+                    <div class="quick-command" data-cmd="AT+TEST">测试</div>
+                    <div class="quick-command" data-cmd="AT+VER">版本</div>
+                    <div class="quick-command" data-cmd="AT+LED=ON">LED开</div>
+                    <div class="quick-command" data-cmd="AT+LED=OFF">LED关</div>
+                    <div class="quick-command" data-cmd="AT+RESET">复位</div>
+                </div>
+                
+                <div class="command-input">
+                    <input type="text" id="customCommand" placeholder="输入AT指令，按发送或回车">
+                    <button id="sendBtn" class="btn btn-success" disabled>
+                        <i class="material-icons">send</i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 接收数据显示卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">download</i> 接收数据</h3>
+                <button id="clearReceivedBtn" class="btn-icon" style="background: none; border: none; color: #666;">
+                    <i class="material-icons">clear_all</i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="receive-display">
+                    <div id="receivedData">等待数据...</div>
+                    <div class="receive-controls">
+                        <button id="copyReceivedBtn" class="btn btn-primary">
+                            <i class="material-icons">content_copy</i> 复制
+                        </button>
+                        <button id="saveReceivedBtn" class="btn btn-success">
+                            <i class="material-icons">save</i> 保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 日志卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">history</i> 运行日志</h3>
+                <button id="clearLogBtn" class="btn-icon" style="background: none; border: none; color: #666;">
+                    <i class="material-icons">delete_sweep</i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="log-container" id="logContainer">
+                    <div class="log-entry system">
+                        <span class="log-time">[系统]</span>
+                        <span class="log-content">串口命令转发器已启动</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 服务器状态卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="material-icons">dns</i> 服务器连接</h3>
+                <button id="reconnectBtn" class="btn-icon" style="background: none; border: none; color: #666;">
+                    <i class="material-icons">refresh</i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="server-info">
+                    <p><strong>服务器地址:</strong> <span id="serverUrlDisplay">ws://107.174.240.113:8080</span></p>
+                    <p><strong>设备ID:</strong> 
+                        <span id="serverDeviceId" style="font-family: monospace; font-size: 0.9rem;">未设置</span>
+                        <span id="copyDeviceIdBtn" style="margin-left: 10px; cursor: pointer; color: var(--primary-color);">
+                            <i class="material-icons" style="font-size: 16px;">content_copy</i>
+                        </span>
+                    </p>
+                    <p><strong>连接状态:</strong> <span id="wsStatus">未连接</span></p>
+                </div>
+                <button id="testServerBtn" class="btn btn-primary" style="margin-top: 10px;">
+                    <i class="material-icons">wifi</i> 测试服务器连接
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部信息 -->
+        <footer class="app-footer">
+            <p>串口命令转发器 v1.0 - 支持JDY-31 SPP 3.0</p>
+            <p class="hint">使用5+蓝牙API，兼容JDY-31/HC-05等SPP设备</p>
+            <p style="margin-top: 5px; font-size: 0.8rem;">
+                <span id="connectionInfo">等待连接...</span>
+            </p>
+        </footer>
+    </div>
+
+    <!-- 设备选择模态框 -->
+    <div id="deviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="material-icons">bluetooth_searching</i> 选择设备</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="modalDeviceList" class="modal-device-list"></div>
+                <div class="modal-actions">
+                    <button id="rescanBtn" class="btn btn-primary">
+                        <i class="material-icons">refresh</i> 重新扫描
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript代码 -->
+    <script>
+        // 全局应用对象 - 支持JDY-31 SPP 3.0
+        const App = {
+            // 配置
+            config: {
+                serverUrl: 'ws://107.174.240.113:8080', // 使用您的服务器IP地址
+                deviceId: null,
+                autoReconnect: true,
+                reconnectDelay: 3000,
+                logMaxLines: 100,
+                scanDuration: 10000,
+                receivedMaxLines: 100,
+                backgroundMode: true,
+                backgroundCheckInterval: 30000,
+                // JDY-31 SPP配置
+                sppServiceUUID: '00001101-0000-1000-8000-00805F9B34FB' // 标准SPP UUID
+            },
+            
+            // 状态
+            state: {
+                bluetoothConnected: false,
+                bluetoothInitialized: false,
+                serverConnected: false,
+                scanning: false,
+                connecting: false,
+                currentDevice: null,
+                commandCount: 0,
+                logs: [],
+                receivedData: [],
+                discoveredDevices: [],
+                backgroundActive: false,
+                backgroundTimer: null,
+                lastActiveTime: Date.now(),
+                backgroundAudio: null,
+                permissionsRequested: false,
+                ws: null, // WebSocket连接
+                sppSocket: null, // SPP Socket连接
+                sppConnected: false
+            },
+            
+            // DOM元素引用
+            elements: {},
+            
+            // 初始化应用
+            init: function() {
+                console.log('初始化应用...');
+                this.initElements();
+                this.initEvents();
+                
+                // 检查5+ API支持
+                const apiReady = this.check5PlusAPI();
+                
+                if (!apiReady) {
+                    this.showToast('5+ API初始化失败', 'error');
+                    return;
+                }
+                
+                // 加载配置
+                this.loadConfig();
+                
+                // 初始化后台模式
+                this.initBackgroundMode();
+                
+                // 显示主界面
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    document.querySelector('.container').style.display = 'block';
+                    
+                    // 延迟检查设备ID
+                    setTimeout(() => {
+                        if (!this.config.deviceId || this.config.deviceId.trim() === '') {
+                            this.showToast('请先设置设备ID', 'warning');
+                            this.log('设备ID未设置，请先设置设备ID', 'system');
+                        }
+                        
+                        this.showToast('应用初始化完成', 'success');
+                        this.log('应用启动完成', 'system');
+                    }, 1000);
+                    
+                }, 1000);
+            },
+            
+            // 初始化DOM元素引用
+            initElements: function() {
+                this.elements = {
+                    // 设备ID相关
+                    deviceIdInput: document.getElementById('deviceIdInput'),
+                    saveDeviceIdBtn: document.getElementById('saveDeviceIdBtn'),
+                    currentDeviceIdDisplay: document.getElementById('currentDeviceIdDisplay'),
+                    serverDeviceId: document.getElementById('serverDeviceId'),
+                    copyDeviceIdBtn: document.getElementById('copyDeviceIdBtn'),
+                    serverUrlDisplay: document.getElementById('serverUrlDisplay'),
+                    
+                    // 状态显示
+                    bluetoothStatus: document.getElementById('bluetoothStatus'),
+                    bluetoothStatusItem: document.getElementById('bluetoothStatusItem'),
+                    deviceName: document.getElementById('deviceName'),
+                    deviceAddress: document.getElementById('deviceAddress'),
+                    commandCount: document.getElementById('commandCount'),
+                    serverStatusText: document.getElementById('serverStatusText'),
+                    serverStatusDot: document.querySelector('.server-status .status-dot'),
+                    wsStatus: document.getElementById('wsStatus'),
+                    
+                    // 按钮
+                    scanBtn: document.getElementById('scanBtn'),
+                    disconnectBtn: document.getElementById('disconnectBtn'),
+                    sendBtn: document.getElementById('sendBtn'),
+                    clearLogBtn: document.getElementById('clearLogBtn'),
+                    reconnectBtn: document.getElementById('reconnectBtn'),
+                    testServerBtn: document.getElementById('testServerBtn'),
+                    clearReceivedBtn: document.getElementById('clearReceivedBtn'),
+                    copyReceivedBtn: document.getElementById('copyReceivedBtn'),
+                    saveReceivedBtn: document.getElementById('saveReceivedBtn'),
+                    backgroundModeSwitch: document.getElementById('backgroundModeSwitch'),
+                    
+                    // 输入
+                    customCommand: document.getElementById('customCommand'),
+                    
+                    // 列表
+                    deviceList: document.getElementById('deviceList'),
+                    modalDeviceList: document.getElementById('modalDeviceList'),
+                    logContainer: document.getElementById('logContainer'),
+                    receivedData: document.getElementById('receivedData'),
+                    backgroundStatus: document.getElementById('backgroundStatus'),
+                    
+                    // 其他
+                    connectingAnimation: document.getElementById('connectingAnimation'),
+                    connectingText: document.getElementById('connectingText'),
+                    toast: document.getElementById('toast'),
+                    deviceModal: document.getElementById('deviceModal'),
+                    connectionInfo: document.getElementById('connectionInfo')
+                };
+                
+                // 显示服务器地址
+                this.elements.serverUrlDisplay.textContent = this.config.serverUrl;
+            },
+            
+            // 初始化事件监听
+            initEvents: function() {
+                // 保存设备ID按钮
+                this.elements.saveDeviceIdBtn.addEventListener('click', () => this.saveDeviceId());
+                
+                // 设备ID输入框回车保存
+                this.elements.deviceIdInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.saveDeviceId();
+                });
+                
+                // 复制设备ID按钮
+                this.elements.copyDeviceIdBtn.addEventListener('click', () => this.copyDeviceId());
+                
+                // 扫描按钮
+                this.elements.scanBtn.addEventListener('click', () => this.scanDevices());
+                
+                // 断开连接按钮
+                this.elements.disconnectBtn.addEventListener('click', () => this.disconnectBluetooth());
+                
+                // 发送按钮
+                this.elements.sendBtn.addEventListener('click', () => this.sendCommand());
+                
+                // 回车发送命令
+                this.elements.customCommand.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendCommand();
+                });
+                
+                // 清除日志
+                this.elements.clearLogBtn.addEventListener('click', () => this.clearLogs());
+                
+                // 重新连接服务器
+                this.elements.reconnectBtn.addEventListener('click', () => this.reconnectWebSocket());
+                
+                // 测试服务器
+                this.elements.testServerBtn.addEventListener('click', () => this.testServerConnection());
+                
+                // 快捷命令
+                document.querySelectorAll('.quick-command').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const command = e.target.getAttribute('data-cmd');
+                        this.elements.customCommand.value = command;
+                        this.sendCommand();
+                    });
+                });
+                
+                // 清空接收数据
+                this.elements.clearReceivedBtn.addEventListener('click', () => this.clearReceivedData());
+                
+                // 复制接收数据
+                this.elements.copyReceivedBtn.addEventListener('click', () => this.copyReceivedData());
+                
+                // 保存接收数据
+                this.elements.saveReceivedBtn.addEventListener('click', () => this.saveReceivedData());
+                
+                // 后台模式开关
+                this.elements.backgroundModeSwitch.addEventListener('change', (e) => {
+                    this.toggleBackgroundMode(e.target.checked);
+                });
+                
+                // 模态框关闭
+                document.querySelector('.close-modal').addEventListener('click', () => {
+                    this.hideDeviceModal();
+                });
+                
+                // 重新扫描按钮
+                document.getElementById('rescanBtn').addEventListener('click', () => this.scanDevices());
+            },
+            
+            // ==================== 蓝牙功能（支持JDY-31 SPP 3.0） ====================
+            
+            // 检查5+ API支持
+            check5PlusAPI: function() {
+                if (typeof plus === 'undefined') {
+                    this.showToast('5+ API初始化失败', 'error');
+                    return false;
+                }
+                if (!plus.bluetooth) {
+                    this.showToast('设备不支持蓝牙', 'error');
+                    return false;
+                }
+                this.initBluetoothModule();
+                return true;
+            },
+            
+            // 初始化蓝牙模块
+            initBluetoothModule: function() {
+                plus.bluetooth.openBluetoothAdapter({
+                    success: (res) => {
+                        this.state.bluetoothInitialized = true;
+                        this.updateBluetoothStatusDisplay();
+                        this.showToast('蓝牙模块就绪（支持SPP 3.0）', 'success');
+                        this.requestBluetoothPermissions();
+                    },
+                    fail: (error) => {
+                        const errorMsg = this.getBluetoothErrorMsg(error);
+                        this.showToast(errorMsg, 'error');
+                        this.state.bluetoothInitialized = false;
+                        this.updateBluetoothStatusDisplay();
+                    }
+                });
+
+                // 监听蓝牙状态变化
+                plus.bluetooth.onBluetoothAdapterStateChange((res) => {
+                    this.state.bluetoothInitialized = res.available;
+                    this.updateBluetoothStatusDisplay();
+                });
+            },
+            
+            // 获取蓝牙错误消息
+            getBluetoothErrorMsg: function(error) {
+                const errorMap = {
+                    10000: '蓝牙未开启',
+                    10001: '蓝牙适配器不可用',
+                    10011: '缺少蓝牙/位置权限',
+                    10013: 'SPP连接失败',
+                    10014: 'SPP数据发送失败'
+                };
+                return errorMap[error.code] || (error.message || '蓝牙未知错误');
+            },
+            
+            // 请求蓝牙权限
+            requestBluetoothPermissions: function() {
+                if (this.state.permissionsRequested) return;
+                
+                this.state.permissionsRequested = true;
+                
+                if (plus.os && plus.os.name === 'Android') {
+                    const permissions = [
+                        'android.permission.BLUETOOTH',
+                        'android.permission.BLUETOOTH_ADMIN',
+                        'android.permission.ACCESS_FINE_LOCATION'
+                    ];
+                    
+                    plus.android.requestPermissions(
+                        permissions,
+                        () => this.log('权限请求成功', 'system'),
+                        (error) => this.log('权限请求失败', 'warning')
+                    );
+                }
+            },
+            
+            // 更新蓝牙状态显示
+            updateBluetoothStatusDisplay: function() {
+                const statusItem = this.elements.bluetoothStatusItem;
+                const statusText = this.elements.bluetoothStatus;
+                
+                if (this.state.bluetoothInitialized) {
+                    statusText.textContent = this.state.bluetoothConnected ? '已连接' : '就绪';
+                    statusItem.classList.remove('disconnected');
+                    statusItem.classList.add(this.state.bluetoothConnected ? 'connected' : 'disconnected');
+                    
+                    // 启用扫描按钮
+                    this.elements.scanBtn.disabled = false;
+                } else {
+                    statusText.textContent = '未初始化';
+                    statusItem.classList.remove('connected');
+                    statusItem.classList.add('disconnected');
+                    
+                    // 禁用扫描按钮
+                    this.elements.scanBtn.disabled = true;
+                }
+            },
+            
+            // 扫描蓝牙设备 - SPP专用
+            scanDevices: function() {
+                // 首先检查设备ID是否已设置
+                if (!this.config.deviceId) {
+                    this.showToast('请先设置设备ID', 'warning');
+                    this.elements.deviceIdInput.focus();
+                    return;
+                }
+                
+                if (!this.state.bluetoothInitialized) {
+                    this.showToast('蓝牙未初始化', 'error');
+                    return;
+                }
+                if (this.state.scanning) return;
+
+                this.state.scanning = true;
+                this.state.discoveredDevices = [];
+                this.elements.scanBtn.disabled = true;
+                this.showDeviceModal(); // 显示设备选择弹窗
+
+                // 启动扫描（指定SPP服务UUID）
+                plus.bluetooth.startBluetoothDevicesDiscovery({
+                    services: [this.config.sppServiceUUID], // 仅扫描SPP设备
+                    allowDuplicatesKey: false,
+                    success: () => {
+                        this.log('开始扫描SPP设备...', 'system');
+                        
+                        // 监听设备发现
+                        plus.bluetooth.onBluetoothDeviceFound((result) => {
+                            result.devices.forEach(device => {
+                                const isNew = !this.state.discoveredDevices.some(d => d.deviceId === device.deviceId);
+                                if (isNew) {
+                                    this.state.discoveredDevices.push({
+                                        deviceId: device.deviceId,
+                                        name: device.name || '未知SPP设备',
+                                        RSSI: device.RSSI || 0,
+                                        deviceType: this.getDeviceType(device.name)
+                                    });
+                                    this.updateModalDeviceList(this.state.discoveredDevices);
+                                    this.log(`发现设备: ${device.name || '未知设备'}`, 'system');
+                                }
+                            });
+                        });
+
+                        // 超时停止扫描
+                        setTimeout(() => this.stopScanning(), this.config.scanDuration);
+                    },
+                    fail: (error) => {
+                        this.showToast(this.getBluetoothErrorMsg(error), 'error');
+                        this.stopScanning();
+                    }
+                });
+            },
+            
+            // 停止扫描
+            stopScanning: function() {
+                if (this.state.scanning) {
+                    plus.bluetooth.stopBluetoothDevicesDiscovery();
+                    this.state.scanning = false;
+                    this.elements.scanBtn.disabled = false;
+                    this.log(`扫描完成，发现${this.state.discoveredDevices.length}个SPP设备`, 'system');
+                    if (this.state.discoveredDevices.length === 0) {
+                        this.showToast('未发现JDY-31等SPP设备', 'warning');
+                    }
+                }
+            },
+            
+            // 获取设备类型
+            getDeviceType: function(deviceName) {
+                if (!deviceName) return '未知';
+                
+                const name = deviceName.toUpperCase();
+                
+                if (name.includes('JDY-31')) {
+                    return 'JDY-31蓝牙模块';
+                } else if (name.includes('JDY')) {
+                    return 'JDY系列模块';
+                } else if (name.includes('HC-05') || name.includes('HC-06')) {
+                    return 'HC系列蓝牙模块';
+                } else if (name.includes('SERIAL') || name.includes('COM') || name.includes('SPP')) {
+                    return '串口设备';
+                } else {
+                    return '蓝牙设备';
+                }
+            },
+            
+            // 连接蓝牙设备
+            connectToDevice: function(deviceId, deviceName) {
+                if (this.state.connecting) return;
+                this.state.connecting = true;
+                this.showConnectingAnimation(`正在连接: ${deviceName}`);
+                this.showToast(`正在连接${deviceName}（SPP 3.0）`, 'info');
+                this.log(`正在连接SPP设备: ${deviceName}`, 'system');
+
+                // 1. 建立基础BLE连接
+                plus.bluetooth.createBLEConnection({
+                    deviceId: deviceId,
+                    success: () => {
+                        this.log(`蓝牙基础连接成功: ${deviceName}`, 'system');
+                        // 2. 创建SPP Socket连接
+                        this.createSppSocket(deviceId, deviceName);
+                    },
+                    fail: (error) => {
+                        this.showToast(this.getBluetoothErrorMsg(error), 'error');
+                        this.hideConnectingAnimation();
+                        this.state.connecting = false;
+                    }
+                });
+            },
+            
+            // 创建SPP Socket连接
+            createSppSocket: function(deviceId, deviceName) {
+                try {
+                    this.state.sppSocket = plus.bluetooth.createBluetoothSocket();
+                    if (!this.state.sppSocket) throw new Error('创建SPP Socket失败');
+
+                    // 连接SPP服务（标准UUID）
+                    this.state.sppSocket.connect({
+                        address: deviceId,
+                        uuid: this.config.sppServiceUUID,
+                        success: () => {
+                            // 连接成功状态更新
+                            this.state.currentDevice = { 
+                                deviceId: deviceId, 
+                                name: deviceName 
+                            };
+                            this.state.bluetoothConnected = true;
+                            this.state.sppConnected = true;
+                            
+                            // 更新UI
+                            this.updateBluetoothStatusDisplay();
+                            this.elements.deviceName.textContent = deviceName;
+                            this.elements.deviceAddress.textContent = deviceId.substring(0, 17) + '...';
+                            this.elements.sendBtn.disabled = false;
+                            this.elements.disconnectBtn.disabled = false;
+                            
+                            this.log(`成功连接到SPP设备: ${deviceName}`, 'system');
+                            this.showToast(`已连接${deviceName}（SPP 3.0）`, 'success');
+
+                            // 监听SPP数据接收
+                            this.startSppDataListening();
+                            
+                            this.hideConnectingAnimation();
+                            this.state.connecting = false;
+                            this.hideDeviceModal();
+                        },
+                        fail: (error) => {
+                            this.showToast(`SPP连接失败：${error.message}`, 'error');
+                            this.hideConnectingAnimation();
+                            this.state.connecting = false;
+                        }
+                    });
+                } catch (e) {
+                    this.showToast(`SPP创建异常：${e.message}`, 'error');
+                    this.hideConnectingAnimation();
+                    this.state.connecting = false;
+                }
+            },
+            
+            // 开始监听SPP数据
+            startSppDataListening: function() {
+                if (!this.state.sppSocket) return;
+
+                // 监听SPP数据
+                this.state.sppSocket.onData((data) => {
+                    try {
+                        // 解析二进制数据为文本
+                        let text = '';
+                        for (let i = 0; i < data.length; i++) {
+                            text += String.fromCharCode(data[i]);
+                        }
+                        const trimmedText = text.trim();
+                        if (trimmedText) {
+                            this.displayReceivedData(trimmedText, data.length);
+                            this.log(`收到SPP数据：${trimmedText}`, 'received');
+                        }
+                    } catch (e) {
+                        this.displayReceivedData(`二进制数据：${data.length}字节`, data.length);
+                    }
+                });
+
+                // 监听SPP连接断开
+                this.state.sppSocket.onClose(() => {
+                    this.disconnectBluetooth();
+                    this.showToast('SPP连接已断开', 'info');
+                });
+                
+                this.log('已开启SPP数据监听', 'system');
+            },
+            
+            // 发送蓝牙数据
+            sendBluetoothData: function(data) {
+                if (!this.state.sppConnected || !this.state.sppSocket) {
+                    this.showToast('SPP未连接', 'error');
+                    return;
+                }
+
+                this.state.sppSocket.send({
+                    data: data,
+                    success: () => {
+                        this.log(`发送SPP数据：${data.trim()}`, 'sent');
+                        this.state.commandCount++;
+                        this.elements.commandCount.textContent = this.state.commandCount;
+                        this.showToast('发送成功', 'success');
+                    },
+                    fail: (error) => {
+                        this.showToast(`发送失败：${this.getBluetoothErrorMsg(error)}`, 'error');
+                    }
+                });
+            },
+            
+            // 断开蓝牙连接
+            disconnectBluetooth: function() {
+                if (this.state.sppSocket) {
+                    try {
+                        this.state.sppSocket.close();
+                    } catch (e) {}
+                    this.state.sppSocket = null;
+                }
+
+                if (this.state.currentDevice) {
+                    plus.bluetooth.closeBLEConnection({
+                        deviceId: this.state.currentDevice.deviceId,
+                        success: () => {},
+                        fail: () => {}
+                    });
+                }
+
+                // 重置状态
+                this.state.bluetoothConnected = false;
+                this.state.sppConnected = false;
+                this.state.currentDevice = null;
+                this.updateBluetoothStatusDisplay();
+                this.elements.deviceName.textContent = '无';
+                this.elements.deviceAddress.textContent = '-';
+                this.elements.sendBtn.disabled = true;
+                this.elements.disconnectBtn.disabled = true;
+                
+                this.log('蓝牙连接已断开', 'system');
+            },
+            
+            // ==================== 其他功能 ====================
+            
+            // 保存设备ID
+            saveDeviceId: function() {
+                const deviceId = this.elements.deviceIdInput.value.trim();
+                
+                if (!deviceId) {
+                    this.showToast('请输入设备ID', 'warning');
+                    this.elements.deviceIdInput.focus();
+                    return;
+                }
+                
+                if (deviceId.length < 3 || deviceId.length > 50) {
+                    this.showToast('设备ID长度应在3-50个字符之间', 'warning');
+                    return;
+                }
+                
+                // 检查是否只包含允许的字符
+                const validPattern = /^[a-zA-Z0-9_-]+$/;
+                if (!validPattern.test(deviceId)) {
+                    this.showToast('设备ID只能包含字母、数字、下划线和连字符', 'warning');
+                    return;
+                }
+                
+                // 保存设备ID
+                this.config.deviceId = deviceId;
+                this.saveConfig();
+                
+                // 更新显示
+                this.elements.currentDeviceIdDisplay.textContent = deviceId;
+                this.elements.serverDeviceId.textContent = deviceId;
+                this.elements.deviceIdInput.value = '';
+                
+                this.showToast('设备ID保存成功', 'success');
+                this.log(`设备ID已设置为: ${deviceId}`, 'system');
+                
+                // 如果服务器未连接，尝试连接
+                if (!this.state.serverConnected && this.config.serverUrl) {
+                    this.connectWebSocket();
+                }
+            },
+            
+            // 复制设备ID
+            copyDeviceId: function() {
+                if (!this.config.deviceId) {
+                    this.showToast('设备ID未设置', 'warning');
+                    return;
+                }
+                
+                if (plus && plus.navigator && plus.navigator.setClipboard) {
+                    plus.navigator.setClipboard(this.config.deviceId, () => {
+                        this.showToast('设备ID已复制到剪贴板', 'success');
+                        this.log('设备ID已复制', 'system');
+                    }, (error) => {
+                        this.showToast('复制失败: ' + error.message, 'error');
+                    });
+                } else {
+                    // 降级方案
+                    const textarea = document.createElement('textarea');
+                    textarea.value = this.config.deviceId;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        this.showToast('设备ID已复制到剪贴板', 'success');
+                        this.log('设备ID已复制', 'system');
+                    } catch (err) {
+                        this.showToast('复制失败', 'error');
+                    }
+                    document.body.removeChild(textarea);
+                }
+            },
+            
+            // 加载配置
+            loadConfig: function() {
+                try {
+                    const saved = localStorage.getItem('serialForwarderConfig');
+                    if (saved) {
+                        const config = JSON.parse(saved);
+                        Object.assign(this.config, config);
+                        
+                        // 显示已保存的设备ID
+                        if (this.config.deviceId) {
+                            this.elements.currentDeviceIdDisplay.textContent = this.config.deviceId;
+                            this.elements.serverDeviceId.textContent = this.config.deviceId;
+                        }
+                        
+                        // 设置后台模式开关状态
+                        if (this.elements.backgroundModeSwitch) {
+                            this.elements.backgroundModeSwitch.checked = this.config.backgroundMode || false;
+                        }
+                    }
+                } catch (e) {
+                    console.error('加载配置失败:', e);
+                }
+            },
+            
+            // 保存配置
+            saveConfig: function() {
+                try {
+                    localStorage.setItem('serialForwarderConfig', JSON.stringify(this.config));
+                    this.log('配置已保存', 'system');
+                } catch (e) {
+                    console.error('保存配置失败:', e);
+                }
+            },
+            
+            // 发送命令
+            sendCommand: function() {
+                const command = this.elements.customCommand.value.trim();
+                if (!command) {
+                    this.showToast('请输入命令', 'warning');
+                    return;
+                }
+                
+                // 发送到蓝牙
+                this.sendBluetoothData(command + '\r\n');
+                
+                // 清空输入框
+                this.elements.customCommand.value = '';
+                
+                // 自动聚焦
+                setTimeout(() => {
+                    this.elements.customCommand.focus();
+                }, 100);
+            },
+            
+            // 显示接收到的数据
+            displayReceivedData: function(data, byteLength = 0) {
+                const timestamp = new Date().toLocaleTimeString();
+                let displayText = '';
+                
+                if (data && data.trim() !== '') {
+                    // 如果是正常文本数据
+                    displayText = `[${timestamp}] ${data}`;
+                } else if (byteLength > 0) {
+                    // 如果是二进制数据或空数据
+                    displayText = `[${timestamp}] 收到${byteLength}字节数据`;
+                } else {
+                    return;
+                }
+                
+                // 保存到内存数组
+                this.state.receivedData.push({
+                    time: timestamp,
+                    data: data,
+                    bytes: byteLength,
+                    fullText: displayText
+                });
+                
+                // 限制数据量
+                if (this.state.receivedData.length > this.config.receivedMaxLines) {
+                    this.state.receivedData.shift();
+                }
+                
+                // 更新显示
+                this.updateReceivedDisplay();
+            },
+            
+            // 更新接收数据显示
+            updateReceivedDisplay: function() {
+                const displayDiv = this.elements.receivedData;
+                if (!displayDiv) return;
+                
+                if (this.state.receivedData.length === 0) {
+                    displayDiv.textContent = '等待数据...';
+                    return;
+                }
+                
+                // 生成显示文本（最新的在前）
+                let displayText = '';
+                for (let i = this.state.receivedData.length - 1; i >= 0; i--) {
+                    const item = this.state.receivedData[i];
+                    displayText += item.fullText + '\n';
+                }
+                
+                displayDiv.textContent = displayText.trim();
+                
+                // 确保显示最新数据
+                displayDiv.scrollTop = 0;
+            },
+            
+            // 更新模态框设备列表
+            updateModalDeviceList: function(devices) {
+                const container = this.elements.modalDeviceList;
+                if (!container) return;
+                
+                container.innerHTML = '';
+                
+                if (devices.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px 20px; color: #666;">
+                            <i class="material-icons" style="font-size: 48px; margin-bottom: 10px;">bluetooth_disabled</i>
+                            <p>正在搜索SPP设备...</p>
+                            <p style="font-size: 0.9rem; margin-top: 10px;">支持JDY-31/HC-05等SPP 3.0设备</p>
+                            <p style="font-size: 0.85rem; color: #999; margin-top: 5px;">
+                                1. 确保设备支持SPP 3.0协议<br>
+                                2. 设备已开启并可被发现<br>
+                                3. 已开启位置服务（Android需要）
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 按信号强度排序（信号强的在前）
+                devices.sort((a, b) => b.RSSI - a.RSSI);
+                
+                devices.forEach(device => {
+                    const item = document.createElement('div');
+                    item.className = 'device-item';
+                    
+                    // 信号强度颜色
+                    let rssiColor = '#666';
+                    if (device.RSSI >= -50) rssiColor = '#4CAF50'; // 强
+                    else if (device.RSSI >= -70) rssiColor = '#FF9800'; // 中
+                    else rssiColor = '#F44336'; // 弱
+                    
+                    item.innerHTML = `
+                        <div class="device-info">
+                            <div class="device-name">${device.name}</div>
+                            <div class="device-address">${device.deviceId}</div>
+                            <div class="device-rssi" style="color: ${rssiColor};">
+                                <i class="material-icons" style="font-size: 12px; vertical-align: middle;">wifi</i>
+                                信号: ${device.RSSI} dBm
+                            </div>
+                            <div class="device-type">${device.deviceType}</div>
+                        </div>
+                        <i class="material-icons" style="color: var(--primary-color);">chevron_right</i>
+                    `;
+                    
+                    item.addEventListener('click', () => {
+                        this.connectToDevice(device.deviceId, device.name);
+                    });
+                    
+                    container.appendChild(item);
+                });
+            },
+            
+            // 清空接收数据
+            clearReceivedData: function() {
+                this.state.receivedData = [];
+                this.updateReceivedDisplay();
+                this.log('接收数据已清空', 'system');
+                this.showToast('接收数据已清空', 'info');
+            },
+            
+            // 复制接收数据
+            copyReceivedData: function() {
+                if (this.state.receivedData.length === 0) {
+                    this.showToast('没有可复制的数据', 'warning');
+                    return;
+                }
+                
+                let textToCopy = '';
+                for (let i = this.state.receivedData.length - 1; i >= 0; i--) {
+                    textToCopy += this.state.receivedData[i].fullText + '\n';
+                }
+                
+                // 使用5+ API的Clipboard
+                if (plus && plus.navigator && plus.navigator.setClipboard) {
+                    plus.navigator.setClipboard(textToCopy, () => {
+                        this.showToast('数据已复制到剪贴板', 'success');
+                        this.log('接收数据已复制', 'system');
+                    }, (error) => {
+                        this.showToast('复制失败: ' + error.message, 'error');
+                    });
+                } else {
+                    // 降级方案：使用execCommand
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        this.showToast('数据已复制到剪贴板', 'success');
+                        this.log('接收数据已复制', 'system');
+                    } catch (err) {
+                        this.showToast('复制失败', 'error');
+                    }
+                    document.body.removeChild(textarea);
+                }
+            },
+            
+            // 保存接收数据
+            saveReceivedData: function() {
+                if (this.state.receivedData.length === 0) {
+                    this.showToast('没有可保存的数据', 'warning');
+                    return;
+                }
+                
+                let textToSave = '=== 串口接收数据记录 ===\n';
+                textToSave += '时间戳: ' + new Date().toLocaleString() + '\n';
+                textToSave += '设备ID: ' + (this.config.deviceId || '未设置') + '\n';
+                textToSave += '蓝牙设备: ' + (this.state.currentDevice ? this.state.currentDevice.name : '未连接') + '\n';
+                textToSave += '连接协议: SPP 3.0\n';
+                textToSave += '记录条数: ' + this.state.receivedData.length + '\n';
+                textToSave += '=========================\n\n';
+                
+                for (let i = this.state.receivedData.length - 1; i >= 0; i--) {
+                    textToSave += this.state.receivedData[i].fullText + '\n';
+                }
+                
+                // 使用5+ API保存文件
+                if (plus && plus.io) {
+                    const fileName = `serial_data_${new Date().getTime()}.txt`;
+                    
+                    plus.io.requestFileSystem(plus.io.PRIVATE_DOC, (fs) => {
+                        fs.root.getFile(fileName, {create: true}, (fileEntry) => {
+                            fileEntry.createWriter((writer) => {
+                                writer.onwrite = () => {
+                                    this.showToast(`数据已保存到: ${fileName}`, 'success');
+                                    this.log(`接收数据已保存到文件: ${fileName}`, 'system');
+                                };
+                                writer.onerror = (e) => {
+                                    this.showToast('保存失败: ' + e.message, 'error');
+                                };
+                                writer.write(textToSave);
+                            }, (error) => {
+                                this.showToast('创建文件写入器失败: ' + error.message, 'error');
+                            });
+                        }, (error) => {
+                            this.showToast('创建文件失败: ' + error.message, 'error');
+                        });
+                    }, (error) => {
+                        this.showToast('请求文件系统失败: ' + error.message, 'error');
+                    });
+                } else {
+                    // 降级方案：提示用户手动保存
+                    const blob = new Blob([textToSave], {type: 'text/plain;charset=utf-8'});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `serial_data_${new Date().getTime()}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    this.showToast('数据文件已开始下载', 'success');
+                    this.log('接收数据已保存为文件', 'system');
+                }
+            },
+            
+            // 添加日志
+            log: function(message, type = 'system') {
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.innerHTML = `<span class="log-time">[${timestamp}]</span><span class="log-content">${message}</span>`;
+                
+                this.elements.logContainer.appendChild(entry);
+                
+                // 限制日志数量
+                const entries = this.elements.logContainer.querySelectorAll('.log-entry');
+                if (entries.length > this.config.logMaxLines) {
+                    entries[0].remove();
+                }
+                
+                // 自动滚动到底部
+                this.elements.logContainer.scrollTop = this.elements.logContainer.scrollHeight;
+                
+                // 保存到内存
+                this.state.logs.push({ time: timestamp, message, type });
+            },
+            
+            // 清除日志
+            clearLogs: function() {
+                this.elements.logContainer.innerHTML = '';
+                this.state.logs = [];
+                this.log('日志已清除', 'system');
+                this.showToast('日志已清除', 'info');
+            },
+            
+            // 显示Toast通知
+            showToast: function(message, type = 'info') {
+                const toast = this.elements.toast;
+                toast.textContent = message;
+                toast.className = `toast ${type}`;
+                
+                // 显示
+                setTimeout(() => {
+                    toast.classList.add('show');
+                }, 10);
+                
+                // 3秒后隐藏
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            },
+            
+            // 显示设备选择模态框
+            showDeviceModal: function() {
+                this.elements.deviceModal.style.display = 'flex';
+            },
+            
+            // 隐藏设备选择模态框
+            hideDeviceModal: function() {
+                this.elements.deviceModal.style.display = 'none';
+                this.stopScanning();
+            },
+            
+            // 显示连接动画
+            showConnectingAnimation: function(text) {
+                if (this.elements.connectingText) {
+                    this.elements.connectingText.textContent = text;
+                }
+                this.elements.connectingAnimation.style.display = 'flex';
+            },
+            
+            // 隐藏连接动画
+            hideConnectingAnimation: function() {
+                this.elements.connectingAnimation.style.display = 'none';
+            },
+            
+            // ==================== 后台运行功能 ====================
+            
+            // 切换后台运行模式
+            toggleBackgroundMode: function(enabled) {
+                this.config.backgroundMode = enabled;
+                this.saveConfig();
+                
+                if (enabled) {
+                    this.startBackgroundMode();
+                    this.showToast('后台运行已开启', 'success');
+                    this.log('后台运行模式已开启', 'system');
+                } else {
+                    this.stopBackgroundMode();
+                    this.showToast('后台运行已关闭', 'info');
+                    this.log('后台运行模式已关闭', 'system');
+                }
+                
+                this.updateBackgroundStatus();
+            },
+            
+            // 启动后台模式
+            startBackgroundMode: function() {
+                if (!this.config.backgroundMode) return;
+                
+                // 设置后台音频（避免应用被系统杀死）
+                if (plus.audio && plus.audio.createPlayer) {
+                    try {
+                        // 创建一个静音音频用于保持后台运行
+                        this.state.backgroundAudio = plus.audio.createPlayer();
+                        if (this.state.backgroundAudio) {
+                            this.state.backgroundAudio.play({
+                                loop: true,
+                                volume: 0  // 静音
+                            });
+                        }
+                    } catch (e) {
+                        console.log('音频后台模式创建失败:', e);
+                    }
+                }
+                
+                // 设置后台任务
+                this.state.backgroundTimer = setInterval(() => {
+                    this.checkBackgroundStatus();
+                }, this.config.backgroundCheckInterval);
+                
+                // 监听应用状态变化
+                document.addEventListener('pause', () => {
+                    this.onAppPause();
+                });
+                
+                document.addEventListener('resume', () => {
+                    this.onAppResume();
+                });
+                
+                // 监听页面可见性变化
+                document.addEventListener('visibilitychange', () => {
+                    this.onVisibilityChange();
+                });
+                
+                this.state.backgroundActive = true;
+                this.updateBackgroundStatus();
+            },
+            
+            // 停止后台模式
+            stopBackgroundMode: function() {
+                if (this.state.backgroundTimer) {
+                    clearInterval(this.state.backgroundTimer);
+                    this.state.backgroundTimer = null;
+                }
+                
+                // 停止后台音频
+                if (this.state.backgroundAudio) {
+                    try {
+                        this.state.backgroundAudio.stop();
+                    } catch (e) {
+                        console.log('停止音频失败:', e);
+                    }
+                    this.state.backgroundAudio = null;
+                }
+                
+                this.state.backgroundActive = false;
+                this.updateBackgroundStatus();
+            },
+            
+            // 检查后台状态
+            checkBackgroundStatus: function() {
+                if (!this.state.backgroundActive) return;
+                
+                const now = Date.now();
+                const inactiveTime = now - this.state.lastActiveTime;
+                
+                // 如果应用在后台，保持连接活跃
+                if (inactiveTime > 60000) {  // 超过1分钟无活动
+                    this.keepConnectionsAlive();
+                }
+                
+                // 更新最后活动时间
+                this.state.lastActiveTime = now;
+            },
+            
+            // 保持连接活跃
+            keepConnectionsAlive: function() {
+                // 保持WebSocket连接
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    // 发送心跳
+                    this.ws.send(JSON.stringify({
+                        type: 'ping',
+                        device_id: this.config.deviceId,
+                        timestamp: Date.now(),
+                        background: true
+                    }));
+                }
+                
+                // 保持蓝牙连接
+                if (this.state.currentDevice) {
+                    this.log('后台保持连接活跃', 'system');
+                }
+            },
+            
+            // 应用暂停事件（进入后台）
+            onAppPause: function() {
+                if (this.config.backgroundMode) {
+                    this.log('应用进入后台运行', 'system');
+                    this.showBackgroundNotification('应用已在后台运行');
+                    
+                    // 记录进入后台时间
+                    this.state.lastBackgroundTime = Date.now();
+                    
+                    // 发送进入后台状态到服务器
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({
+                            type: 'status',
+                            device_id: this.config.deviceId,
+                            status: 'background',
+                            timestamp: Date.now()
+                        }));
+                    }
+                }
+            },
+            
+            // 应用恢复事件（返回前台）
+            onAppResume: function() {
+                if (this.config.backgroundMode) {
+                    this.log('应用返回前台', 'system');
+                    this.showBackgroundNotification('应用已返回前台');
+                    
+                    // 检查连接状态
+                    this.checkAllConnections();
+                    
+                    // 发送返回前台状态到服务器
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({
+                            type: 'status',
+                            device_id: this.config.deviceId,
+                            status: 'foreground',
+                            timestamp: Date.now()
+                        }));
+                    }
+                }
+            },
+            
+            // 页面可见性变化
+            onVisibilityChange: function() {
+                if (document.hidden) {
+                    // 页面隐藏（切换到其他标签或最小化）
+                    this.onAppPause();
+                } else {
+                    // 页面显示
+                    this.onAppResume();
+                }
+            },
+            
+            // 显示后台通知
+            showBackgroundNotification: function(message) {
+                // 移除现有的通知
+                const existing = document.querySelector('.background-notification');
+                if (existing) {
+                    existing.remove();
+                }
+                
+                // 创建新通知
+                const notification = document.createElement('div');
+                notification.className = 'background-notification';
+                notification.innerHTML = `
+                    <i class="material-icons" style="vertical-align: middle; margin-right: 5px;">
+                        ${message.includes('后台') ? 'play_circle_filled' : 'desktop_windows'}
+                    </i>
+                    ${message}
+                `;
+                
+                document.body.appendChild(notification);
+                
+                // 3秒后自动移除
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 3000);
+            },
+            
+            // 更新后台状态显示
+            updateBackgroundStatus: function() {
+                const statusEl = this.elements.backgroundStatus;
+                if (!statusEl) return;
+                
+                if (this.config.backgroundMode && this.state.backgroundActive) {
+                    statusEl.innerHTML = `
+                        <i class="material-icons" style="vertical-align: middle; margin-right: 5px;">check_circle</i>
+                        <span>当前状态: 后台运行已启用</span>
+                    `;
+                    statusEl.className = 'background-status active';
+                } else if (this.config.backgroundMode) {
+                    statusEl.innerHTML = `
+                        <i class="material-icons" style="vertical-align: middle; margin-right: 5px;">pause_circle_filled</i>
+                        <span>当前状态: 后台运行准备就绪</span>
+                    `;
+                    statusEl.className = 'background-status';
+                } else {
+                    statusEl.innerHTML = `
+                        <i class="material-icons" style="vertical-align: middle; margin-right: 5px;">not_interested</i>
+                        <span>当前状态: 仅前台运行</span>
+                    `;
+                    statusEl.className = 'background-status inactive';
+                }
+            },
+            
+            // 初始化后台模式
+            initBackgroundMode: function() {
+                // 恢复后台模式设置
+                if (this.config.backgroundMode) {
+                    this.elements.backgroundModeSwitch.checked = true;
+                    this.startBackgroundMode();
+                }
+                
+                this.updateBackgroundStatus();
+            },
+            
+            // ==================== WebSocket功能 ====================
+            
+            // WebSocket连接
+            connectWebSocket: function() {
+                // 检查设备ID是否已设置
+                if (!this.config.deviceId) {
+                    this.showToast('请先设置设备ID', 'warning');
+                    this.log('设备ID未设置，无法连接服务器', 'system');
+                    return;
+                }
+                
+                // 检查服务器地址
+                if (!this.config.serverUrl || this.config.serverUrl.trim() === '') {
+                    this.showToast('服务器地址未设置', 'warning');
+                    this.log('服务器地址未设置', 'system');
+                    return;
+                }
+                
+                try {
+                    this.updateServerStatus('connecting');
+                    this.log('正在连接服务器...', 'system');
+                    this.log(`使用设备ID: ${this.config.deviceId}`, 'system');
+                    
+                    this.ws = new WebSocket(this.config.serverUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.log('服务器连接成功', 'system');
+                        this.state.serverConnected = true;
+                        this.updateServerStatus('online');
+                        this.elements.wsStatus.textContent = '已连接';
+                        this.showToast('服务器连接成功', 'success');
+                        
+                        // 注册设备
+                        this.registerDevice();
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleWebSocketMessage(data);
+                        } catch (e) {
+                            this.log(`收到消息: ${event.data}`, 'received');
+                        }
+                    };
+                    
+                    this.ws.onclose = (event) => {
+                        this.log(`服务器连接关闭: ${event.code} ${event.reason || '无'}`, 'system');
+                        this.state.serverConnected = false;
+                        this.updateServerStatus('offline');
+                        this.elements.wsStatus.textContent = '未连接';
+                        
+                        // 自动重连
+                        if (this.config.autoReconnect) {
+                            setTimeout(() => {
+                                this.reconnectWebSocket();
+                            }, this.config.reconnectDelay);
+                        }
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        this.log('服务器连接错误', 'error');
+                        this.state.serverConnected = false;
+                        this.updateServerStatus('offline');
+                        this.elements.wsStatus.textContent = '连接错误';
+                    };
+                    
+                } catch (error) {
+                    this.log(`创建WebSocket失败: ${error.message}`, 'error');
+                    this.updateServerStatus('offline');
+                    this.elements.wsStatus.textContent = '连接失败';
+                }
+            },
+            
+            // 处理WebSocket消息
+            handleWebSocketMessage: function(data) {
+                if (data.type === 'command') {
+                    const command = data.data;
+                    this.log(`收到服务器命令: ${command}`, 'received');
+                    
+                    // 转发到蓝牙
+                    if (this.state.currentDevice) {
+                        this.sendBluetoothData(command + '\r\n');
+                    } else {
+                        this.showToast('收到命令但蓝牙未连接', 'warning');
+                    }
+                } else if (data.type === 'registered') {
+                    this.log('设备注册成功', 'system');
+                    this.showToast('设备注册成功', 'success');
+                } else if (data.type === 'error') {
+                    this.log(`服务器错误: ${data.message}`, 'error');
+                    this.showToast(`服务器错误: ${data.message}`, 'error');
+                } else if (data.type === 'welcome') {
+                    this.log(`服务器欢迎消息: ${data.message}`, 'system');
+                } else if (data.type === 'pong') {
+                    // 心跳响应
+                    this.log('服务器心跳响应', 'system');
+                }
+            },
+            
+            // 注册设备
+            registerDevice: function() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const message = {
+                        type: 'register',
+                        device_id: this.config.deviceId,
+                        timestamp: Date.now(),
+                        platform: '5plus_spp',
+                        version: '1.0.0',
+                        description: '串口命令转发器(SPP 3.0)'
+                    };
+                    this.ws.send(JSON.stringify(message));
+                    this.log('发送设备注册信息', 'system');
+                }
+            },
+            
+            // 重新连接WebSocket
+            reconnectWebSocket: function() {
+                this.log('尝试重新连接服务器...', 'system');
+                if (this.ws) {
+                    this.ws.close();
+                }
+                this.connectWebSocket();
+            },
+            
+            // 测试服务器连接
+            testServerConnection: function() {
+                // 检查设备ID是否已设置
+                if (!this.config.deviceId) {
+                    this.showToast('请先设置设备ID', 'warning');
+                    return;
+                }
+                
+                this.showToast('正在测试服务器连接...', 'info');
+                this.log('测试服务器连接', 'system');
+                
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ 
+                        type: 'ping',
+                        device_id: this.config.deviceId 
+                    }));
+                    this.showToast('服务器连接正常', 'success');
+                } else {
+                    this.showToast('服务器未连接', 'error');
+                }
+            },
+            
+            // 更新服务器状态显示
+            updateServerStatus: function(status) {
+                const dot = this.elements.serverStatusDot;
+                const text = this.elements.serverStatusText;
+                
+                dot.className = 'status-dot';
+                
+                switch (status) {
+                    case 'online':
+                        dot.classList.add('online');
+                        text.textContent = '服务器已连接';
+                        break;
+                    case 'offline':
+                        dot.classList.add('offline');
+                        text.textContent = '服务器未连接';
+                        break;
+                    case 'connecting':
+                        dot.classList.add('connecting');
+                        text.textContent = '正在连接...';
+                        break;
+                }
+            },
+            
+            // 检查所有连接状态
+            checkAllConnections: function() {
+                // 检查WebSocket连接
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    this.log('检测到WebSocket断开，尝试重连', 'system');
+                    this.reconnectWebSocket();
+                }
+                
+                // 检查蓝牙连接
+                if (this.state.currentDevice && !this.state.bluetoothConnected) {
+                    this.log('检测到蓝牙断开', 'system');
+                }
+            },
+            
+            // 应用清理
+            cleanup: function() {
+                // 停止后台模式
+                this.stopBackgroundMode();
+                
+                // 断开WebSocket
+                if (this.ws) {
+                    this.ws.close();
+                }
+                
+                // 断开蓝牙
+                this.disconnectBluetooth();
+                
+                this.log('应用清理完成', 'system');
+            }
+        };
+        
+        // 页面加载完成后初始化应用
+        document.addEventListener('DOMContentLoaded', function() {
+            // 延迟初始化，确保5+ API已加载
+            setTimeout(() => {
+                App.init();
+            }, 500);
+        });
+        
+        // 在页面卸载时清理
+        window.addEventListener('beforeunload', () => {
+            App.cleanup();
+        });
+        
+        // 处理返回键
+        document.addEventListener('plusready', function() {
+            if (plus.key) {
+                plus.key.addEventListener('backbutton', function() {
+                    const modal = document.getElementById('deviceModal');
+                    if (modal.style.display === 'flex') {
+                        App.hideDeviceModal();
+                    } else {
+                        // 退出确认
+                        if (confirm('确定要退出应用吗？')) {
+                            App.cleanup();
+                            setTimeout(() => {
+                                plus.runtime.quit();
+                            }, 100);
+                        }
+                    }
+                });
+            }
+            
+            // 监听应用退出事件
+            plus.runtime.onClose = function() {
+                App.cleanup();
+            };
+        });
+    </script>
+</body>
+</html>
